@@ -88,3 +88,143 @@ Si alguna condición falla, el resultado es `DENY`.
 - Los informes de auditoría o seguridad se consideran `Restricted`.
 - Los secretos, tokens y credenciales nunca deben aparecer en logs ni respuestas de la API.
 - La clasificación no concede acceso: cada operación también requiere un permiso explícito.
+
+## 8. Modelo de identidades, roles y grupos
+
+Una identidad representa a una persona, dispositivo o proceso. Un rol agrupa permisos y un grupo permite asignar roles a múltiples identidades de manera administrable.
+
+Las identidades humanas reciben roles mediante grupos de seguridad. Las workload identities reciben permisos directamente y no deben permitir inicio de sesión interactivo.
+
+| Actor | Tipo de identidad | Rol de aplicación | Mecanismo de asignación | Inicio interactivo |
+|---|---|---|---|---|
+| `employee_user` | `Workforce identity` | `Employee` | `AccessLab-Employees` | `Yes` |
+| `support_l1_user` | `Workforce identity` | `Support Analyst L1` | `AccessLab-Support-L1` | `Yes` |
+| `support_l2_user` | `Workforce identity` | `Support Analyst L2` | `AccessLab-Support-L2` | `Yes` |
+| `support_manager_user` | `Workforce identity` | `Support Manager` | `AccessLab-Support-Managers` | `Yes` |
+| `iam_administrator_user` | `Workforce identity` | `IAM Administrator` | `AccessLab-IAM-Admins` | `Yes` |
+| `security_analyst_user` | `Workforce identity` | `Security Analyst` | `AccessLab-Security-Analysts` | `Yes` |
+| `auditor_user` | `Workforce identity` | `Auditor` | `AccessLab-Auditors` | `Yes` |
+| `external_technician_user` | `External identity` | `External Technician` | `AccessLab-External-Technicians` | `Yes` |
+| `support_automation` | `Workload identity (service account)` | `Support Automation` | Asignación directa | `No` |
+| `accesslab_api` | `Workload identity` | Permisos de infraestructura | Asignación directa | `No` |
+| `registered_device` | `Device identity` | No corresponde | Señal de acceso contextual | `No` |
+| `log_analysis_agent` | `Agent identity` | `Log Analysis Agent` | Asignación directa | `No` |
+
+## 9. Reglas de asignación
+
+- Las personas deben utilizar cuentas individuales.
+- Los roles humanos deben asignarse mediante grupos de seguridad.
+- Las workload identities no deben pertenecer a grupos humanos.
+- Las identidades no humanas no deben permitir inicio de sesión interactivo.
+- Los accesos externos deben ser temporales y revisados periódicamente.
+- Los roles privilegiados deben requerir MFA.
+- Una device identity puede funcionar como condición de acceso, pero no reemplaza la identidad del usuario.
+- La pertenencia simultánea a roles incompatibles debe ser rechazada.
+
+## 10. Clasificación de riesgo de los roles
+
+La clasificación de un rol depende del impacto que tendría su uso indebido, del scope autorizado y de las acciones que puede ejecutar.
+
+### Niveles
+
+- `Standard`: acceso rutinario y limitado principalmente a recursos propios.
+- `Sensitive`: acceso a datos de otras personas o recursos sensibles, sin capacidad para administrar privilegios.
+- `Privileged`: capacidad para modificar identidades, accesos, configuraciones o ejecutar operaciones de alto impacto.
+
+El acceso a datos propios no convierte automáticamente un rol en `Sensitive`. El riesgo aumenta cuando permite acceder o actuar sobre recursos pertenecientes a otras identidades.
+
+| Rol | Categoría | Justificación |
+|---|---|---|
+| `Employee` | `Standard` | Administra únicamente sus propios tickets, archivos y sesiones, sin acceso a recursos de terceros. |
+| `Support Analyst L1` | `Sensitive` | Consulta y actualiza tickets asignados pertenecientes a otras personas, con un scope limitado. |
+| `Support Analyst L2` | `Sensitive` | Accede a tickets escalados y evidencia técnica sensible, pero no administra identidades ni privilegios. |
+| `Support Manager` | `Privileged` | Tiene acceso amplio a los tickets del equipo y puede asignarlos, cambiar prioridades y aprobar cierres. |
+| `IAM Administrator` | `Privileged` | Puede crear o desactivar cuentas y asignar o revocar roles, por lo que su uso indebido permitiría una privilege escalation. |
+| `Security Analyst` | `Privileged` | Investiga alertas y eventos restringidos y puede revocar sesiones comprometidas durante un incidente. |
+| `Auditor` | `Sensitive` | Puede leer y exportar evidencia restringida, pero no modificar usuarios, permisos ni registros. |
+| `External Technician` | `Sensitive` | Como tercero, accede temporalmente a tickets y archivos de otras personas dentro de un scope estrictamente limitado. |
+| `Support Automation` | `Sensitive` | Procesa tickets de diferentes usuarios mediante reglas automáticas, pero no administra roles ni realiza acciones críticas. |
+| `AccessLab API Runtime` | `Privileged` | Accede a la base de datos, escribe auditorías y utiliza permisos de infraestructura necesarios para ejecutar la aplicación. |
+| `Log Analysis Agent` | `Sensitive` | Lee registros restringidos y crea alertas, pero no puede modificar evidencia ni ejecutar medidas de contención. |
+
+## 11. Modelo de permisos
+
+Los permisos de AccessLab utilizan el siguiente formato:
+
+`resource:action:scope`
+
+- `resource`: objeto protegido.
+- `action`: operación solicitada.
+- `scope`: conjunto de recursos sobre el que puede realizarse.
+
+Un permiso no produce automáticamente un `ALLOW`. También deben cumplirse las condiciones de autenticación, estado de cuenta, sesión, sensibilidad y contexto.
+
+## 12. Scopes
+
+| Scope | Descripción |
+|---|---|
+| `self` | La propia cuenta o sesión de la identidad. |
+| `own` | Recursos cuyo propietario es la identidad. |
+| `assigned` | Recursos asignados expresamente a la identidad. |
+| `team` | Recursos pertenecientes al equipo de la identidad. |
+| `queue` | Recursos pendientes dentro de una cola operativa autorizada. |
+| `all` | Todos los recursos del tipo indicado, sujetos a condiciones adicionales. |
+| `service` | Recursos técnicos estrictamente necesarios para una workload o agent identity. |
+
+El scope `all` debe utilizarse excepcionalmente porque aumenta el impacto de una cuenta comprometida.
+
+## 13. Catálogo de acciones
+
+| Recurso | Acciones disponibles |
+|---|---|
+| `ticket` | `create`, `read`, `update`, `comment`, `assign`, `change_priority`, `escalate`, `close`, `reopen` |
+| `ticket_attachment` | `upload`, `read`, `delete` |
+| `knowledge_article` | `read`, `create`, `update`, `publish`, `archive` |
+| `user_account` | `read`, `create`, `update`, `disable`, `reactivate` |
+| `role_assignment` | `read`, `request`, `approve`, `assign`, `revoke` |
+| `session` | `read`, `revoke` |
+| `audit_event` | `create`, `read`, `export` |
+| `security_alert` | `create`, `read`, `investigate`, `update_status`, `close` |
+| `report` | `create`, `read`, `export` |
+| `application_secret` | `read`, `rotate` |
+
+## 14. Acciones no permitidas
+
+AccessLab no implementará los siguientes permisos:
+
+- `ticket:delete`: los tickets se conservan como evidencia operativa.
+- `audit_event:update`: los eventos de auditoría deben ser inmutables.
+- `audit_event:delete`: ninguna identidad puede borrar evidencia.
+- `user_account:delete`: las cuentas deben desactivarse, no eliminarse.
+- Mostrar secretos mediante la interfaz o incluirlos en logs.
+- Permitir que una identidad asigne o aumente sus propios privilegios.
+
+## 15. Condiciones contextuales
+
+Además del permiso, AccessLab podrá exigir condiciones como:
+
+- Cuenta activa.
+- Sesión válida.
+- MFA completado.
+- Dispositivo registrado o compliant.
+- Acceso externo no vencido.
+- Archivo externo aprobado.
+- Ticket dentro de un estado modificable.
+- Clasificación compatible con el rol.
+
+Estas condiciones complementan RBAC y se aproximan a un modelo `ABAC`.
+
+## 16. Ejercicio de traducción de permisos
+
+| Caso | Permiso |
+|---|---|
+| Un empleado consulta su propio ticket. | `ticket:read:own` |
+| Un analista L1 actualiza un ticket asignado. | `ticket:update:assigned` |
+| Un Support Manager asigna un ticket de su equipo. | `ticket:assign:team` |
+| Un IAM Administrator desactiva una cuenta. | `user_account:disable:all` |
+| Un Auditor exporta eventos de auditoría. | `audit_event:export:all` |
+| Un External Technician consulta un archivo autorizado de un ticket asignado. | `ticket_attachment:read:assigned`; condición: `external_access_active AND attachment_external_approved` |
+| Support Automation asigna un ticket de la cola. | `ticket:assign:queue` |
+| AccessLab API Runtime lee un secreto necesario para operar. | `application_secret:read:service` |
+| Log Analysis Agent lee logs autorizados y crea una alerta. | `audit_event:read:service` y `security_alert:create:service` |
+| Security Analyst revoca una sesión comprometida. | `session:revoke:all` |
