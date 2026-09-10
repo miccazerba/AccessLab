@@ -228,3 +228,90 @@ Estas condiciones complementan RBAC y se aproximan a un modelo `ABAC`.
 | AccessLab API Runtime lee un secreto necesario para operar. | `application_secret:read:service` |
 | Log Analysis Agent lee logs autorizados y crea una alerta. | `audit_event:read:service` y `security_alert:create:service` |
 | Security Analyst revoca una sesión comprometida. | `session:revoke:all` |
+
+## 17. Matriz RBAC
+
+La matriz RBAC relaciona roles con permisos explícitos. Cada celda autorizada contiene el scope correspondiente.
+
+El símbolo `—` representa la ausencia de un permiso y produce `DENY` por defecto.
+
+### 17.1 Permisos operativos sobre tickets
+
+| Permiso base | Employee | Support L1 | Support L2 | Support Manager | External Technician |
+|---|---|---|---|---|---|
+| `ticket:create` | `own` | `—` | `—` | `—` | `—` |
+| `ticket:read` | `own` | `assigned` | `assigned` | `team` | `assigned` |
+| `ticket:update` | `own` | `assigned` | `assigned` | `—` | `—` |
+| `ticket:comment` | `own` | `assigned` | `assigned` | `team` | `assigned` |
+| `ticket:assign` | `—` | `—` | `—` | `team` | `—` |
+| `ticket:change_priority` | `—` | `—` | `—` | `team` | `—` |
+| `ticket:escalate` | `—` | `assigned` | `assigned` | `team` | `—` |
+| `ticket:close` | `own` | `assigned` | `assigned` | `team` | `—` |
+| `ticket:reopen` | `own` | `assigned` | `assigned` | `team` | `—` |
+
+### Condiciones de los tickets
+
+- Los empleados solo pueden modificar tickets propios que continúen en un estado modificable.
+- Los analistas solo pueden actuar sobre tickets que tengan asignados.
+- Los tickets escalados a L2 deben ser asignados expresamente a un analista L2.
+- El Support Manager administra tickets de su equipo, no todos los tickets de la organización.
+- Los tickets de seguridad o fraude quedan fuera del scope general del equipo de soporte.
+- El External Technician requiere una asignación activa y acceso externo no vencido.
+- Ningún rol puede eliminar definitivamente un ticket.
+
+### 17.2 Permisos sobre archivos adjuntos
+
+Un archivo adjunto solamente puede consultarse cuando la identidad tiene acceso tanto al archivo como al ticket relacionado.
+
+Esto evita que una persona modifique el ID del archivo y acceda a evidencia perteneciente a otro ticket.
+
+| Permiso base | Employee | Support L1 | Support L2 | Support Manager | External Technician |
+|---|---|---|---|---|---|
+| `ticket_attachment:upload` | `own` | `assigned` | `assigned` | `—` | `—` |
+| `ticket_attachment:read` | `own` | `assigned` | `assigned` | `team` | `assigned` |
+| `ticket_attachment:delete` | `—` | `—` | `—` | `—` | `—` |
+
+#### Condiciones para archivos adjuntos
+
+- La identidad también debe poder leer el ticket relacionado.
+- Los archivos heredan como mínimo la clasificación del ticket.
+- Los nombres de archivo deben generarse de forma segura.
+- El sistema debe validar tamaño, extensión y tipo MIME.
+- Los archivos ejecutables deben ser rechazados.
+- Los archivos deben almacenarse fuera del directorio público de la aplicación.
+- Un archivo potencialmente malicioso debe ser bloqueado o puesto en cuarentena.
+- Un External Technician solo puede consultar archivos aprobados expresamente.
+- Ningún rol operativo puede eliminar definitivamente un archivo incorporado como evidencia.
+
+### 17.3 Permisos sobre artículos de conocimiento
+
+Los artículos utilizan los estados `draft`, `published` y `archived`.
+
+| Permiso base | Employee | Support L1 | Support L2 | Support Manager | External Technician |
+|---|---|---|---|---|---|
+| `knowledge_article:read` | `all` | `all` | `all` | `all` | `—` |
+| `knowledge_article:create` | `—` | `—` | `own` | `own` | `—` |
+| `knowledge_article:update` | `—` | `—` | `own` | `team` | `—` |
+| `knowledge_article:publish` | `—` | `—` | `—` | `team` | `—` |
+| `knowledge_article:archive` | `—` | `—` | `—` | `team` | `—` |
+
+#### Condiciones para artículos de conocimiento
+
+- Employee y Support L1 solo pueden consultar artículos publicados.
+- Support L2 puede crear y modificar sus propios borradores.
+- Support Manager revisa y publica artículos del equipo.
+- La persona que redacta un artículo no debe publicarlo si requiere aprobación.
+- Los artículos archivados conservan su historial.
+- Los artículos sensibles pueden requerir controles adicionales.
+- External Technician no accede a la base interna de conocimiento.
+
+#### Controles de archivado
+
+- Archivar un artículo no elimina su contenido ni su historial.
+- Solo Support Manager puede archivar artículos de su equipo.
+- La acción requiere una justificación obligatoria.
+- Cada archivado genera un evento de auditoría.
+- Las versiones anteriores deben permanecer inmutables.
+- Los artículos archivados no aparecen como procedimientos vigentes.
+- Auditor puede consultar artículos archivados y su historial, pero no modificar su estado.
+- Los artículos no pueden eliminarse permanentemente mediante la aplicación.
