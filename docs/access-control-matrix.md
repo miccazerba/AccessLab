@@ -431,3 +431,54 @@ Todas las identidades humanas pueden administrar aspectos limitados de su propia
 - Log Analysis Agent no puede modificar logs ni contener incidentes.
 - Los datos enviados al agente deben minimizarse y tratarse como entrada no confiable.
 - Cada acción registra al actor original y al componente que la ejecutó.
+
+## 18. Separation of Duties
+
+Separation of Duties evita que una sola identidad pueda iniciar, aprobar, ejecutar y ocultar una operación sensible.
+
+### 18.1 Tipos de conflicto
+
+- `Hard conflict (SSD)`: los roles no pueden coexistir en una misma identidad.
+- `Transactional conflict (DSD)`: pueden coexistir excepcionalmente, pero no actuar sobre la misma operación.
+- `No conflict`: la combinación está permitida.
+
+### 18.2 Matriz de conflictos
+
+### 18.2 Matriz de conflictos
+
+| Rol o capacidad A | Rol o capacidad B | Tipo de conflicto | Riesgo | Control |
+|---|---|---|---|---|
+| `Employee` | `Support Analyst L1` | `No conflict` | Employee funciona como acceso base y L1 agrega responsabilidades laborales. | Permitir la combinación y evaluar los permisos de forma acumulativa. |
+| `IAM Administrator` | `Auditor` | `Hard conflict (SSD)` | La misma persona podría administrar accesos y luego auditar sus propias acciones, eliminando la independencia del control. | Bloquear la pertenencia simultánea y asignar las funciones a personas diferentes. |
+| `Security Analyst` | `Auditor` | `Hard conflict (SSD)` | La misma persona podría investigar, cerrar un incidente y después evaluar su propia respuesta. | Separar operaciones de seguridad y auditoría mediante grupos incompatibles. |
+| `Support Manager` | `Auditor` | `Hard conflict (SSD)` | El manager podría tomar decisiones operativas y posteriormente auditar sus propios tickets, cierres e informes. | Impedir la combinación y utilizar una persona auditora independiente. |
+| `Support Manager` | `IAM Administrator` | `Transactional conflict (DSD)` | Podría aprobar una solicitud de acceso y ejecutar personalmente la asignación. | Exigir que `approved_by` y `assigned_by` correspondan a identidades diferentes. |
+| `Support Analyst L1` | `Support Analyst L2` | `No conflict` | No existe un conflicto directo, pero mantener ambos roles puede provocar privilege creep y responsabilidades ambiguas. | Mantener un único nivel principal y permitir la combinación solo de forma temporal y documentada. |
+| `External Technician` | Cualquier rol de workforce | `Hard conflict (SSD)` | Una identidad externa podría adquirir privilegios internos y atravesar el límite de confianza de la organización. | Bloquear grupos internos para identidades externas y exigir sponsor, vencimiento y revisión. |
+| `Support Automation` | `AccessLab API Runtime` | `Hard conflict (SSD)` | Una misma credencial podría manipular tickets, acceder a recursos técnicos y generar la evidencia de sus propias acciones. | Utilizar workload identities, credenciales y scopes separados. |
+| `AccessLab API Runtime` | `Log Analysis Agent` | `Hard conflict (SSD)` | Una aplicación comprometida podría ejecutar operaciones y también influir en el sistema encargado de detectarlas. | Separar el componente operativo del componente de monitoreo y limitar sus accesos a los logs. |
+| `Log Analysis Agent` | `Security Analyst` | `Hard conflict (SSD)` | Un agente de IA podría recibir permisos humanos para investigar, cerrar alertas o contener cuentas sin aprobación. | Mantener una Agent Identity independiente y aplicar Human-in-the-Loop. |
+
+### 18.3 Reglas transaccionales de SoD
+
+| Proceso | Funciones que deben separarse | Regla |
+|---|---|---|
+| Asignación de acceso | Solicitante, aprobador e implementador | Una identidad no puede aprobar ni ejecutar su propia solicitud. |
+| Asignación privilegiada | Aprobador e IAM Administrator | Requiere aprobación independiente antes de ejecutar la asignación. |
+| Publicación de conocimiento | Autor y publicador | Quien crea un artículo sujeto a aprobación no puede publicarlo. |
+| Cierre de alerta crítica | Investigador y revisor | Una alerta de severidad alta requiere una segunda revisión. |
+| Auditoría | Operador y Auditor | La persona que ejecutó una acción no puede auditarla formalmente. |
+| Acceso externo | External Technician y sponsor | La identidad externa no puede patrocinar ni extender su propio acceso. |
+| Workload permissions | Workload y administrador de credenciales | Una identidad no humana no puede ampliar sus permisos ni rotar sus credenciales. |
+| Offboarding | IAM Administrator y Auditor | IAM ejecuta la revocación y Auditor verifica posteriormente su cumplimiento. |
+
+#### Reglas de implementación
+
+- Las comparaciones deben utilizar identificadores inmutables, no nombres o correos.
+- `requester_id`, `approver_id` e `implementer_id` deben conservarse en auditoría.
+- El backend debe rechazar una operación cuando dos funciones incompatibles correspondan a la misma persona.
+- Crear cuentas diferentes para una misma persona no debe permitir evadir SoD.
+- Las excepciones requieren justificación, aprobación, fecha de vencimiento y revisión posterior.
+- Los accesos de emergencia deben generar una alerta inmediata.
+- Una tarea periódica debe detectar combinaciones de grupos incompatibles.
+- Los conflictos detectados deben producir `DENY` y un `audit_event`.
