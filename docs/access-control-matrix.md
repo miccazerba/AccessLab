@@ -315,3 +315,119 @@ Los artículos utilizan los estados `draft`, `published` y `archived`.
 - Los artículos archivados no aparecen como procedimientos vigentes.
 - Auditor puede consultar artículos archivados y su historial, pero no modificar su estado.
 - Los artículos no pueden eliminarse permanentemente mediante la aplicación.
+
+### 17.4 Permisos base de autoservicio
+
+Todas las identidades humanas pueden administrar aspectos limitados de su propia cuenta y sesiones.
+
+| Permiso base | Workforce Identity | External Technician |
+|---|---|---|
+| `user_account:read` | `self` | `self` |
+| `user_account:update` | `self` | `self` |
+| `role_assignment:read` | `self` | `self` |
+| `role_assignment:request` | `self` | `—` |
+| `session:read` | `self` | `self` |
+| `session:revoke` | `self` | `self` |
+
+#### Condiciones de autoservicio
+
+- `user_account:update:self` solo permite modificar campos no privilegiados.
+- Ninguna identidad puede cambiar sus propios roles o estado.
+- Una solicitud de rol no concede acceso automáticamente.
+- Los accesos externos deben ser solicitados por un sponsor interno.
+- Revocar una sesión propia no permite afectar sesiones ajenas.
+
+### 17.5 Permisos administrativos de identidad y sesiones
+
+| Permiso base | Support Manager | IAM Administrator | Security Analyst | Auditor |
+|---|---|---|---|---|
+| `user_account:read` | `team` | `all` | `all` | `all` |
+| `user_account:create` | `—` | `all` | `—` | `—` |
+| `user_account:update` | `—` | `all` | `—` | `—` |
+| `user_account:disable` | `—` | `all` | `—` | `—` |
+| `user_account:reactivate` | `—` | `all` | `—` | `—` |
+| `role_assignment:read` | `team` | `all` | `all` | `all` |
+| `role_assignment:approve` | `team` | `—` | `—` | `—` |
+| `role_assignment:assign` | `—` | `all` | `—` | `—` |
+| `role_assignment:revoke` | `—` | `all` | `—` | `—` |
+| `session:read` | `—` | `all` | `all` | `all` |
+| `session:revoke` | `—` | `all` | `all` | `—` |
+
+#### Reglas administrativas
+
+- Support Manager solo puede aprobar solicitudes no privilegiadas de su equipo.
+- Support Manager no puede aprobar sus propias solicitudes.
+- IAM Administrator ejecuta asignaciones previamente aprobadas.
+- IAM Administrator no puede aprobar sus propias asignaciones.
+- Los roles privilegiados requieren una aprobación independiente.
+- Security Analyst puede contener incidentes revocando sesiones.
+- Security Analyst no puede modificar cuentas ni roles.
+- Auditor puede consultar evidencia, pero no ejecutar cambios.
+- Desactivar una cuenta debe revocar inmediatamente sus sesiones activas.
+- Toda operación administrativa requiere MFA y genera un evento de auditoría.
+
+### 17.6 Permisos de auditoría, seguridad e informes
+
+| Permiso base | Support Manager | IAM Administrator | Security Analyst | Auditor |
+|---|---|---|---|---|
+| `audit_event:create` | `—` | `—` | `—` | `—` |
+| `audit_event:read` | `—` | `—` | `all` | `all` |
+| `audit_event:export` | `—` | `—` | `all` | `all` |
+| `security_alert:create` | `—` | `—` | `own` | `—` |
+| `security_alert:read` | `—` | `—` | `all` | `all` |
+| `security_alert:investigate` | `—` | `—` | `all` | `—` |
+| `security_alert:update_status` | `—` | `—` | `all` | `—` |
+| `security_alert:close` | `—` | `—` | `all` | `—` |
+| `report:create` | `own` | `—` | `own` | `own` |
+| `report:read` | `team` | `—` | `team` | `all` |
+| `report:export` | `team` | `—` | `team` | `all` |
+
+#### Controles de auditoría y seguridad
+
+- Las identidades humanas no crean directamente eventos de auditoría.
+- AccessLab API Runtime genera los eventos al ejecutar acciones.
+- Los eventos de auditoría son inmutables.
+- IAM Administrator no puede modificar ni borrar evidencia sobre sus propias acciones.
+- Security Analyst puede investigar alertas y contener incidentes.
+- Auditor mantiene acceso de solo lectura.
+- Cerrar una alerta de severidad alta requiere revisión de una segunda persona.
+- Exportar auditorías requiere una justificación.
+- Cada exportación debe generar un nuevo evento de auditoría.
+- Los informes heredan la clasificación más alta de sus fuentes.
+- Support Manager solo puede generar informes operativos de su equipo.
+
+### 17.7 Permisos de identidades no humanas
+
+| Permiso base | Support Automation | AccessLab API Runtime | Log Analysis Agent |
+|---|---|---|---|
+| `ticket:read` | `service` | `—` | `—` |
+| `ticket:update` | `service` | `—` | `—` |
+| `ticket:assign` | `queue` | `—` | `—` |
+| `ticket:change_priority` | `service` | `—` | `—` |
+| `ticket:escalate` | `service` | `—` | `—` |
+| `application_secret:read` | `—` | `service` | `—` |
+| `application_secret:rotate` | `—` | `—` | `—` |
+| `audit_event:create` | `—` | `service` | `—` |
+| `audit_event:read` | `—` | `—` | `service` |
+| `audit_event:export` | `—` | `—` | `—` |
+| `security_alert:create` | `—` | `—` | `service` |
+| `security_alert:read` | `—` | `—` | `service` |
+| `security_alert:investigate` | `—` | `—` | `—` |
+| `security_alert:update_status` | `—` | `—` | `—` |
+| `security_alert:close` | `—` | `—` | `—` |
+| `user_account:update` | `—` | `—` | `—` |
+| `role_assignment:assign` | `—` | `—` | `—` |
+| `session:revoke` | `—` | `—` | `—` |
+
+#### Controles para identidades no humanas
+
+- Ninguna identidad no humana permite inicio de sesión interactivo.
+- Cada identidad debe tener una finalidad única y documentada.
+- Los permisos no definidos producen `DENY`.
+- Las credenciales no pueden almacenarse en código ni en Git.
+- Se utilizarán tokens de corta duración o Managed Identity cuando sea posible.
+- AccessLab API Runtime no obtiene permisos empresariales independientes.
+- Support Automation no puede cerrar tickets ni administrar identidades.
+- Log Analysis Agent no puede modificar logs ni contener incidentes.
+- Los datos enviados al agente deben minimizarse y tratarse como entrada no confiable.
+- Cada acción registra al actor original y al componente que la ejecutó.
